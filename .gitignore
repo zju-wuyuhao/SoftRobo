@@ -20,6 +20,10 @@ build/
 *.backup
 *.bak
 
+# 测试文件（tests/目录除外）
+test_*.py
+*_test.py
+
 # 系统文件
 .DS_Store
 Thumbs.db

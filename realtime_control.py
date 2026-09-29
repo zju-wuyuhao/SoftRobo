@@ -64,8 +64,10 @@ MODE_VELOCITY_POSITION = 0x07
 # 位置换算常量
 WHEEL_DIAMETER_MM = 17.0                        # 轮子直径（毫米）
 WHEEL_CIRCUMFERENCE_MM = WHEEL_DIAMETER_MM * 3.14159265359  # 圆周长 ≈ 53.41mm
-ENCODER_COUNTS_PER_REV = 8192                   # 编码器分辨率
-MM_TO_ENCODER = ENCODER_COUNTS_PER_REV / WHEEL_CIRCUMFERENCE_MM  # ≈ 153.4
+ENCODER_COUNTS_PER_REV = 8191                   # 编码器分辨率（每圈计数）
+GEAR_RATIO = 36                                 # 减速比 36:1
+ENCODER_COUNTS_PER_OUTPUT_REV = ENCODER_COUNTS_PER_REV * GEAR_RATIO  # 输出轴每圈编码器计数
+MM_TO_ENCODER = ENCODER_COUNTS_PER_OUTPUT_REV / WHEEL_CIRCUMFERENCE_MM  # ≈ 5522.1
 
 
 # ============================================================================
@@ -211,8 +213,8 @@ class RealtimeMotorController:
         print("[步骤2] 打开CAN设备...")
         ret = self.dll.VCI_OpenDevice(DEVICE_TYPE_USBCAN2, DEFAULT_DEVICE_INDEX, 0)
         if ret != 1:
-            print(f"  [错误] 打开设备失败，返回值: {ret}")
-            return False
+            # 注意：即使返回失败，设备可能已经被打开（被其他程序或之前的会话）
+            print(f"  [警告] VCI_OpenDevice返回{ret}，但继续尝试初始化")
         self.device_opened = True
         print("  [OK] 设备已打开")
 
@@ -331,7 +333,7 @@ class RealtimeMotorController:
         print("[完成] 系统已安全关闭")
         print("="*60 + "\n")
 
-    def set_motor(self, motor_id, rpm=None, position_mm=None, enabled=None):
+    def set_motor(self, motor_id, rpm=None, position_mm=None, enabled=None, relative=False):
         """设置单个电机参数
 
         Args:
@@ -339,6 +341,7 @@ class RealtimeMotorController:
             rpm: 速度（None表示不修改）
             position_mm: 位置（毫米，None表示不修改）
             enabled: 是否启用（None表示不修改）
+            relative: True=相对移动，False=绝对位置（默认）
         """
         if not 1 <= motor_id <= 6:
             print(f"[错误] 电机ID必须在1-6之间")
@@ -348,8 +351,13 @@ class RealtimeMotorController:
             if rpm is not None:
                 self.motor_states[motor_id]['rpm'] = rpm
             if position_mm is not None:
-                # 将毫米转换为编码器计数存储
-                self.motor_states[motor_id]['position'] = mm_to_encoder(position_mm)
+                encoder_count = mm_to_encoder(position_mm)
+                if relative:
+                    # 相对移动：在当前位置基础上累加
+                    self.motor_states[motor_id]['position'] += encoder_count
+                else:
+                    # 绝对位置：直接设置
+                    self.motor_states[motor_id]['position'] = encoder_count
             if enabled is not None:
                 self.motor_states[motor_id]['enabled'] = enabled
 
@@ -489,10 +497,11 @@ def main():
                 try:
                     motor_id = int(cmd[1])
                     rpm = float(cmd[2])
-                    position = int(cmd[3])
+                    position_mm = float(cmd[3])
 
-                    if controller.set_motor(motor_id, rpm=rpm, position=position):
-                        print(f"[OK] 电机{motor_id}: RPM={rpm}, 位置={position}")
+                    if controller.set_motor(motor_id, rpm=rpm, position_mm=position_mm, relative=False):
+                        encoder_count = mm_to_encoder(position_mm)
+                        print(f"[OK] 电机{motor_id}: RPM={rpm}, 绝对位置={position_mm}mm (编码器:{encoder_count})")
 
                 except ValueError:
                     print("[错误] 参数格式错误。用法: set <id> <rpm> <position_mm>")

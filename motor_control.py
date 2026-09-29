@@ -60,8 +60,10 @@ MODE_VELOCITY_POSITION = 0x07
 # 位置换算常量
 WHEEL_DIAMETER_MM = 17.0                        # 轮子直径（毫米）
 WHEEL_CIRCUMFERENCE_MM = WHEEL_DIAMETER_MM * 3.14159265359  # 圆周长 ≈ 53.41mm
-ENCODER_COUNTS_PER_REV = 8192                   # 编码器分辨率
-MM_TO_ENCODER = ENCODER_COUNTS_PER_REV / WHEEL_CIRCUMFERENCE_MM  # ≈ 153.4
+ENCODER_COUNTS_PER_REV = 8191                   # 编码器分辨率（每圈计数）
+GEAR_RATIO = 36                                 # 减速比 36:1
+ENCODER_COUNTS_PER_OUTPUT_REV = ENCODER_COUNTS_PER_REV * GEAR_RATIO  # 输出轴每圈编码器计数
+MM_TO_ENCODER = ENCODER_COUNTS_PER_OUTPUT_REV / WHEEL_CIRCUMFERENCE_MM  # ≈ 5522.1
 
 
 # ============================================================================
@@ -124,8 +126,10 @@ def init_can_device(dll):
     # 打开设备
     ret = dll.VCI_OpenDevice(DEVICE_TYPE_USBCAN2, DEFAULT_DEVICE_INDEX, 0)
     if ret != 1:
-        print("  [错误] 打开设备失败")
-        return False
+        # 注意：即使返回失败，设备可能已经被打开（被其他程序或之前的会话）
+        # 这是CANalyst-II驱动的已知行为，我们继续执行
+        print("  [警告] VCI_OpenDevice返回失败，但继续尝试初始化")
+        pass  # 继续执行，不返回False
 
     # 初始化CAN
     init_config = VCI_INIT_CONFIG(0x80000000, 0xFFFFFFFF, 0, 2, 0x00, 0x14, 0)

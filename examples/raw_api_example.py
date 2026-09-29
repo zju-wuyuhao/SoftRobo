@@ -505,7 +505,7 @@ if __name__ == "__main__":
     # ========== 选择一个示例运行 ==========
 
     # 示例1: 恒速转动5秒
-    # example_1_raw_velocity()
+    example_1_raw_velocity()
 
     # 示例2: 移动到目标位置
     # example_2_raw_position()
